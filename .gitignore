@@ -1,0 +1,32 @@
+*.iml
+.gradle
+/local.properties
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+
+# 모듈 빌드 산출물 (루트의 /build 규칙은 app/build 를 못 잡는다)
+build/
+
+# 파이썬 추출 파이프라인 — 전부 로컬에서 재생성 가능하다
+tools/.venv/
+tools/__pycache__/
+__pycache__/
+
+# MediaPipe 모델(29MB). README의 curl 명령으로 내려받는다
+tools/models/
+
+# 파이프라인 중간 산출물. 최종본은 app/src/main/assets/poses 로 복사된다
+tools/out/
+
+# 레퍼런스 원본 사진. 외부 저작물이라 저장소에 담지 않는다
+tools/refs/
