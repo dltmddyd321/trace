@@ -2,7 +2,9 @@ package me.trace.app.ui
 
 import android.view.ViewGroup
 import androidx.camera.core.CameraSelector
-import androidx.camera.core.ImageCapture
+import androidx.camera.core.ImageAnalysis
+import androidx.camera.core.resolutionselector.ResolutionSelector
+import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
@@ -38,7 +40,10 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import me.trace.app.camera.capturePhoto
+import android.util.Size
+import java.util.concurrent.Executors
+import me.trace.app.camera.SilentCapture
+import me.trace.app.camera.saveToGallery
 import me.trace.app.data.PoseAsset
 
 @Composable
@@ -75,7 +80,27 @@ private fun CameraContent(asset: PoseAsset, onBack: () -> Unit) {
 
     var showOverlay by remember { mutableStateOf(true) }
     var message by remember { mutableStateOf<String?>(null) }
-    val imageCapture = remember { ImageCapture.Builder().build() }
+    val silentCapture = remember { SilentCapture() }
+    // 분석 콜백은 카메라 스레드를 잡으므로 전용 실행기에 태운다.
+    val analysisExecutor = remember { Executors.newSingleThreadExecutor() }
+    val imageAnalysis = remember {
+        ImageAnalysis.Builder()
+            // 기본값이 640x480이라 그대로 두면 저장 화질이 못 쓸 수준이 된다.
+            .setResolutionSelector(
+                ResolutionSelector.Builder()
+                    .setResolutionStrategy(
+                        ResolutionStrategy(
+                            Size(1080, 1920),
+                            ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER,
+                        )
+                    )
+                    .build()
+            )
+            .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+            .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
+            .build()
+            .also { it.setAnalyzer(analysisExecutor, silentCapture.analyzer) }
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         AndroidView(
@@ -103,7 +128,7 @@ private fun CameraContent(asset: PoseAsset, onBack: () -> Unit) {
                         lifecycleOwner,
                         CameraSelector.DEFAULT_BACK_CAMERA,
                         preview,
-                        imageCapture,
+                        imageAnalysis,
                     )
                 }, androidx.core.content.ContextCompat.getMainExecutor(context))
             },
@@ -128,12 +153,9 @@ private fun CameraContent(asset: PoseAsset, onBack: () -> Unit) {
         ShutterButton(
             message = message,
             onClick = {
-                capturePhoto(
-                    context = context,
-                    imageCapture = imageCapture,
-                    onSaved = { message = it },
-                    onError = { message = it },
-                )
+                silentCapture.requestFrame { bitmap ->
+                    saveToGallery(context, bitmap) { message = it }
+                }
             },
             modifier = Modifier.align(Alignment.BottomCenter),
         )
@@ -143,6 +165,7 @@ private fun CameraContent(asset: PoseAsset, onBack: () -> Unit) {
     DisposableEffect(Unit) {
         onDispose {
             ProcessCameraProvider.getInstance(context).get().unbindAll()
+            analysisExecutor.shutdown()
         }
     }
 }
