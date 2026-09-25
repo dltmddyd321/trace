@@ -1,5 +1,6 @@
 package me.trace.app
 
+import android.graphics.Bitmap
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -17,7 +18,10 @@ import androidx.compose.ui.platform.LocalContext
 import me.trace.app.data.PoseAsset
 import me.trace.app.data.loadPoseAssets
 import me.trace.app.ui.CameraScreen
+import me.trace.app.ui.HomeScreen
+import me.trace.app.ui.Placement
 import me.trace.app.ui.PoseListScreen
+import me.trace.app.ui.SuggestScreen
 import me.trace.app.ui.theme.TraceTheme
 
 class MainActivity : ComponentActivity() {
@@ -34,23 +38,54 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+/** 화면 전이. 경로 A(PoseList)와 경로 B(BackgroundCapture → Suggest)가 Shoot 에서 합류한다. */
+private sealed interface Screen {
+    data object Home : Screen
+    data object PoseList : Screen
+    data object BackgroundCapture : Screen
+    data class Suggest(val background: Bitmap) : Screen
+    data class Shoot(val asset: PoseAsset, val placement: Placement) : Screen
+}
+
 @Composable
 private fun TraceApp(modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val assets = remember { loadPoseAssets(context) }
-    var selected by remember { mutableStateOf<PoseAsset?>(null) }
+    var screen by remember { mutableStateOf<Screen>(Screen.Home) }
 
-    val current = selected
-    if (current == null) {
-        PoseListScreen(
-            assets = assets,
-            onSelect = { selected = it },
+    when (val current = screen) {
+        Screen.Home -> HomeScreen(
+            onPickPose = { screen = Screen.PoseList },
+            onCaptureBackground = { screen = Screen.BackgroundCapture },
             modifier = modifier,
         )
-    } else {
-        CameraScreen(
-            asset = current,
-            onBack = { selected = null },
+
+        Screen.PoseList -> PoseListScreen(
+            assets = assets,
+            // 사진에서 본뜬 템플릿은 원래 구도를 그대로 쓴다.
+            onSelect = { screen = Screen.Shoot(it, Placement.Original) },
+            modifier = modifier,
+        )
+
+        Screen.BackgroundCapture -> CameraScreen(
+            asset = null,
+            onBack = { screen = Screen.Home },
+            onCaptured = { screen = Screen.Suggest(it) },
+            modifier = modifier,
+        )
+
+        is Screen.Suggest -> SuggestScreen(
+            background = current.background,
+            assets = assets,
+            onConfirm = { asset, placement -> screen = Screen.Shoot(asset, placement) },
+            onBack = { screen = Screen.BackgroundCapture },
+            modifier = modifier,
+        )
+
+        is Screen.Shoot -> CameraScreen(
+            asset = current.asset,
+            placement = current.placement,
+            onBack = { screen = Screen.Home },
             modifier = modifier,
         )
     }

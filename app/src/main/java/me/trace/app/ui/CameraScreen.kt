@@ -46,17 +46,30 @@ import me.trace.app.camera.SilentCapture
 import me.trace.app.camera.saveToGallery
 import me.trace.app.data.PoseAsset
 
+/**
+ * 카메라 프리뷰. 두 가지로 쓰인다.
+ *
+ * - 구도를 얹고 찍기: [asset] 을 주면 오버레이가 뜨고, 찍은 사진은 갤러리로 간다
+ * - 배경만 찍기: [asset] 이 null 이고 [onCaptured] 를 주면 저장하지 않고 비트맵을 넘긴다
+ */
 @Composable
 fun CameraScreen(
-    asset: PoseAsset,
+    asset: PoseAsset?,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    placement: Placement = Placement.Original,
+    onCaptured: ((android.graphics.Bitmap) -> Unit)? = null,
 ) {
     val permission = rememberCameraPermission()
 
     Box(modifier = modifier.fillMaxSize().background(Color.Black)) {
         when (permission.state) {
-            PermissionState.Granted -> CameraContent(asset = asset, onBack = onBack)
+            PermissionState.Granted -> CameraContent(
+                asset = asset,
+                placement = placement,
+                onCaptured = onCaptured,
+                onBack = onBack,
+            )
             PermissionState.Denied -> PermissionNotice(
                 message = "구도를 화면에 겹쳐 보여주려면 카메라가 필요합니다.",
                 actionLabel = "권한 허용하기",
@@ -74,7 +87,12 @@ fun CameraScreen(
 }
 
 @Composable
-private fun CameraContent(asset: PoseAsset, onBack: () -> Unit) {
+private fun CameraContent(
+    asset: PoseAsset?,
+    placement: Placement,
+    onCaptured: ((android.graphics.Bitmap) -> Unit)?,
+    onBack: () -> Unit,
+) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
@@ -134,17 +152,18 @@ private fun CameraContent(asset: PoseAsset, onBack: () -> Unit) {
             },
         )
 
-        if (showOverlay) {
+        if (showOverlay && asset != null) {
             PoseOverlay(
                 asset = asset,
                 modifier = Modifier.fillMaxSize(),
-                placement = Placement.Original,
+                placement = placement,
             )
         }
 
         TopBar(
-            hint = asset.hint,
+            hint = asset?.hint.orEmpty(),
             showOverlay = showOverlay,
+            overlayToggleEnabled = asset != null,
             onToggleOverlay = { showOverlay = !showOverlay },
             onBack = onBack,
             modifier = Modifier.align(Alignment.TopCenter),
@@ -154,7 +173,8 @@ private fun CameraContent(asset: PoseAsset, onBack: () -> Unit) {
             message = message,
             onClick = {
                 silentCapture.requestFrame { bitmap ->
-                    saveToGallery(context, bitmap) { message = it }
+                    if (onCaptured != null) onCaptured(bitmap)
+                    else saveToGallery(context, bitmap) { message = it }
                 }
             },
             modifier = Modifier.align(Alignment.BottomCenter),
@@ -174,6 +194,7 @@ private fun CameraContent(asset: PoseAsset, onBack: () -> Unit) {
 private fun TopBar(
     hint: String,
     showOverlay: Boolean,
+    overlayToggleEnabled: Boolean,
     onToggleOverlay: () -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
@@ -184,8 +205,10 @@ private fun TopBar(
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             TextButton(onClick = onBack) { Text("뒤로", color = Color.White) }
-            TextButton(onClick = onToggleOverlay) {
-                Text(if (showOverlay) "가이드 끄기" else "가이드 켜기", color = Color.White)
+            if (overlayToggleEnabled) {
+                TextButton(onClick = onToggleOverlay) {
+                    Text(if (showOverlay) "가이드 끄기" else "가이드 켜기", color = Color.White)
+                }
             }
         }
         if (hint.isNotBlank()) {
