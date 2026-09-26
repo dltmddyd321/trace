@@ -51,7 +51,7 @@ import me.trace.app.data.PoseAsset
 fun SuggestScreen(
     background: Bitmap,
     assets: List<PoseAsset>,
-    onConfirm: (PoseAsset, Placement) -> Unit,
+    onConfirm: (PoseAsset, PlacementSuggestion) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -83,7 +83,7 @@ fun SuggestScreen(
         BackgroundPreview(
             background = background,
             asset = selected?.let { pick -> assets.firstOrNull { it.id == pick.asset } },
-            placement = selected?.let { Placement(it.box) },
+            suggestion = selected,
             modifier = Modifier.padding(top = 12.dp),
         )
 
@@ -141,7 +141,7 @@ fun SuggestScreen(
             val asset = assets.firstOrNull { it.id == pick.asset }
             if (asset != null) {
                 Button(
-                    onClick = { onConfirm(asset, Placement(pick.box)) },
+                    onClick = { onConfirm(asset, pick) },
                     modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
                 ) { Text("이 구도로 찍기") }
             }
@@ -153,7 +153,7 @@ fun SuggestScreen(
 private fun BackgroundPreview(
     background: Bitmap,
     asset: PoseAsset?,
-    placement: Placement?,
+    suggestion: PlacementSuggestion?,
     modifier: Modifier = Modifier,
 ) {
     Box(
@@ -169,12 +169,13 @@ private fun BackgroundPreview(
             modifier = Modifier.fillMaxSize(),
             contentScale = ContentScale.Crop,
         )
-        if (asset != null && placement != null) {
+        if (asset != null && suggestion != null) {
             PoseOverlay(
                 asset = asset,
                 modifier = Modifier.fillMaxSize(),
-                placement = placement,
-                showStructures = false,
+                placement = Placement(suggestion.box),
+                crop = Crop.from(suggestion.crop),
+                structures = suggestion.structures,
             )
         }
     }

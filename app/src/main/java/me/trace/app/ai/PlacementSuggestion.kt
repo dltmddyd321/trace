@@ -2,6 +2,7 @@ package me.trace.app.ai
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import me.trace.app.data.Structure
 
 /** 배경을 보고 AI가 제안한 한 가지 구도. */
 @Serializable
@@ -14,6 +15,8 @@ data class PlacementSuggestion(
     val box: List<Float>,
     /** full / knee / thigh / waist / chest */
     val crop: String = "full",
+    /** 구도를 지탱하는 배경 선. 인물이 아니라 프레임 기준 좌표다. */
+    val structures: List<Structure> = emptyList(),
     /** 찍는 사람에게 건네는 한 문장. */
     val hint: String = "",
     /** 이 구도를 고른 이유. 사용자가 고를 때 판단 근거가 된다. */

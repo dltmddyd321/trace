@@ -16,9 +16,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import me.trace.app.data.PoseAsset
+import me.trace.app.data.Structure
 import me.trace.app.data.loadPoseAssets
 import me.trace.app.ui.CameraScreen
 import me.trace.app.ui.HomeScreen
+import me.trace.app.ui.Crop
 import me.trace.app.ui.Placement
 import me.trace.app.ui.PoseListScreen
 import me.trace.app.ui.SuggestScreen
@@ -44,7 +46,12 @@ private sealed interface Screen {
     data object PoseList : Screen
     data object BackgroundCapture : Screen
     data class Suggest(val background: Bitmap) : Screen
-    data class Shoot(val asset: PoseAsset, val placement: Placement) : Screen
+    data class Shoot(
+        val asset: PoseAsset,
+        val placement: Placement,
+        val crop: Crop = Crop.Full,
+        val structures: List<Structure> = emptyList(),
+    ) : Screen
 }
 
 @Composable
@@ -77,7 +84,14 @@ private fun TraceApp(modifier: Modifier = Modifier) {
         is Screen.Suggest -> SuggestScreen(
             background = current.background,
             assets = assets,
-            onConfirm = { asset, placement -> screen = Screen.Shoot(asset, placement) },
+            onConfirm = { asset, suggestion ->
+                screen = Screen.Shoot(
+                    asset = asset,
+                    placement = Placement(suggestion.box),
+                    crop = Crop.from(suggestion.crop),
+                    structures = suggestion.structures,
+                )
+            },
             onBack = { screen = Screen.BackgroundCapture },
             modifier = modifier,
         )
@@ -85,6 +99,8 @@ private fun TraceApp(modifier: Modifier = Modifier) {
         is Screen.Shoot -> CameraScreen(
             asset = current.asset,
             placement = current.placement,
+            crop = current.crop,
+            structures = current.structures,
             onBack = { screen = Screen.Home },
             modifier = modifier,
         )

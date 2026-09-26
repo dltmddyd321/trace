@@ -125,12 +125,18 @@ ${assets.joinToString(", ")}
 sit 으로 시작하는 것이 앉은 자세, pose 로 시작하는 것이 서 있는 자세다.
 shot 이 sitting 이면 sit 자산을, 아니면 pose 자산을 고른다.
 
+## 구조선
+구도를 지탱하는 배경 선을 최대 3개 고른다. 테이블 모서리, 창틀, 벽 경계, 수평선, 바닥 경계처럼
+찍는 사람이 화면을 맞출 기준이 되는 선이다. 많이 넣으면 가이드가 아니라 복잡한 선화가 된다.
+type 은 table_edge / window_frame / wall_line / horizon / floor_line 중에서만 쓴다.
+line 은 [[x0,y0],[x1,y1]] 두 점이며 화면 전체 기준 0~1 좌표다.
+
 ## 출력
 서로 다른 구도 2~3개를 제안한다. JSON만 출력하고 다른 말은 쓰지 않는다.
 box 는 크롭되어 안 보이는 부분까지 포함한 전신 범위다.
 reason 은 왜 이 구도인지 한 문장으로 쓴다.
 
-{"suggestions":[{"shot":"cropped","asset":"pose03","box":[0.07,0.38,0.53,1.55],"crop":"thigh","hint":"창쪽을 보게 하고 시선 방향에 여백을 두세요","reason":"바닥이 의자로 덮여 있어 전신은 어렵고, 창의 수직선이 인물을 받쳐줍니다"}]}
+{"suggestions":[{"shot":"cropped","asset":"pose03","box":[0.07,0.38,0.53,1.55],"crop":"thigh","structures":[{"type":"table_edge","line":[[0.0,0.72],[0.55,0.62]]}],"hint":"창쪽을 보게 하고 시선 방향에 여백을 두세요","reason":"바닥이 의자로 덮여 있어 전신은 어렵고, 창의 수직선이 인물을 받쳐줍니다"}]}
 """.trimIndent()
 
 /** 모델이 설명을 곁들이거나 코드펜스로 감싸는 경우가 있어 JSON 부분만 잘라낸다. */

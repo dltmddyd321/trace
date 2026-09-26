@@ -45,6 +45,7 @@ import java.util.concurrent.Executors
 import me.trace.app.camera.SilentCapture
 import me.trace.app.camera.saveToGallery
 import me.trace.app.data.PoseAsset
+import me.trace.app.data.Structure
 
 /**
  * 카메라 프리뷰. 두 가지로 쓰인다.
@@ -58,6 +59,8 @@ fun CameraScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
     placement: Placement = Placement.Original,
+    crop: Crop = Crop.Full,
+    structures: List<Structure> = emptyList(),
     onCaptured: ((android.graphics.Bitmap) -> Unit)? = null,
 ) {
     val permission = rememberCameraPermission()
@@ -67,6 +70,8 @@ fun CameraScreen(
             PermissionState.Granted -> CameraContent(
                 asset = asset,
                 placement = placement,
+                crop = crop,
+                structures = structures,
                 onCaptured = onCaptured,
                 onBack = onBack,
             )
@@ -90,6 +95,8 @@ fun CameraScreen(
 private fun CameraContent(
     asset: PoseAsset?,
     placement: Placement,
+    crop: Crop,
+    structures: List<Structure>,
     onCaptured: ((android.graphics.Bitmap) -> Unit)?,
     onBack: () -> Unit,
 ) {
@@ -157,6 +164,9 @@ private fun CameraContent(
                 asset = asset,
                 modifier = Modifier.fillMaxSize(),
                 placement = placement,
+                crop = crop,
+                // 경로 B는 AI가 배경에서 고른 선을, 경로 A는 자산이 들고 있는 선을 쓴다.
+                structures = structures.ifEmpty { asset.structures },
             )
         }
 
