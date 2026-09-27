@@ -2,7 +2,9 @@
 
 구도를 고르면 카메라에 겹쳐 보여주고, 사용자는 따라 맞추기만 하면 되는 안드로이드 앱.
 
-<!-- 데모 영상/스크린샷 자리 -->
+https://github.com/dltmddyd321/trace/raw/main/docs/demo.mp4
+
+> 재생되지 않으면 [docs/demo.mp4](docs/demo.mp4) 에서 볼 수 있다.
 
 ## 왜 만들었나
 
