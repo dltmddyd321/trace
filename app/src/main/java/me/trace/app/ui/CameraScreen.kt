@@ -62,6 +62,7 @@ fun CameraScreen(
     crop: Crop = Crop.Full,
     structures: List<Structure> = emptyList(),
     onCaptured: ((android.graphics.Bitmap) -> Unit)? = null,
+    onPickFromGallery: (() -> Unit)? = null,
 ) {
     val permission = rememberCameraPermission()
 
@@ -73,6 +74,7 @@ fun CameraScreen(
                 crop = crop,
                 structures = structures,
                 onCaptured = onCaptured,
+                onPickFromGallery = onPickFromGallery,
                 onBack = onBack,
             )
             PermissionState.Denied -> PermissionNotice(
@@ -98,6 +100,7 @@ private fun CameraContent(
     crop: Crop,
     structures: List<Structure>,
     onCaptured: ((android.graphics.Bitmap) -> Unit)?,
+    onPickFromGallery: (() -> Unit)?,
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -174,6 +177,7 @@ private fun CameraContent(
             hint = asset?.hint.orEmpty(),
             showOverlay = showOverlay,
             overlayToggleEnabled = asset != null,
+            onPickFromGallery = onPickFromGallery,
             onToggleOverlay = { showOverlay = !showOverlay },
             onBack = onBack,
             modifier = Modifier.align(Alignment.TopCenter),
@@ -205,6 +209,7 @@ private fun TopBar(
     hint: String,
     showOverlay: Boolean,
     overlayToggleEnabled: Boolean,
+    onPickFromGallery: (() -> Unit)?,
     onToggleOverlay: () -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
@@ -215,6 +220,10 @@ private fun TopBar(
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             TextButton(onClick = onBack) { Text("뒤로", color = Color.White) }
+            // 지금 자리를 찍는 대신 예전에 찍어둔 사진으로도 추천받을 수 있어야 한다.
+            onPickFromGallery?.let {
+                TextButton(onClick = it) { Text("갤러리", color = Color.White) }
+            }
             if (overlayToggleEnabled) {
                 TextButton(onClick = onToggleOverlay) {
                     Text(if (showOverlay) "가이드 끄기" else "가이드 켜기", color = Color.White)

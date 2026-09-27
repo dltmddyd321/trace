@@ -9,6 +9,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -16,6 +17,7 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun HomeScreen(
     onCaptureBackground: () -> Unit,
+    onPickBackground: () -> Unit,
     onExtractFromPhoto: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -41,6 +43,10 @@ fun HomeScreen(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 6.dp),
         )
+        TextButton(
+            onClick = onPickBackground,
+            modifier = Modifier.padding(top = 2.dp),
+        ) { Text("갤러리에서 배경 고르기") }
 
         OutlinedButton(
             onClick = onExtractFromPhoto,

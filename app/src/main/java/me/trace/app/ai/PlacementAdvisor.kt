@@ -43,7 +43,7 @@ class PlacementAdvisor(
         background: Bitmap,
         userRequest: String,
         availableAssets: List<AssetSummary>,
-    ): Result<List<PlacementSuggestion>> = withContext(Dispatchers.IO) {
+    ): Result<SuggestionResult> = withContext(Dispatchers.IO) {
         if (!isAvailable) {
             return@withContext Result.failure(IllegalStateException("API 키가 설정되지 않았습니다"))
         }
@@ -83,7 +83,12 @@ class PlacementAdvisor(
                     ?.firstNotNullOfOrNull { it.text }
                     ?: error("응답에 내용이 없습니다")
 
-                json.decodeFromString<SuggestionEnvelope>(text.extractJsonObject()).suggestions
+                val envelope = json.decodeFromString<SuggestionEnvelope>(text.extractJsonObject())
+                when {
+                    envelope.suggestions.isNotEmpty() -> SuggestionResult.Ready(envelope.suggestions)
+                    envelope.unavailable.isNotBlank() -> SuggestionResult.Unavailable(envelope.unavailable)
+                    else -> SuggestionResult.Unavailable("이 사진으로는 구도를 잡기 어렵습니다")
+                }
             }
         }
     }
@@ -127,6 +132,19 @@ ${assets.joinToString("\n") { "- " + it.id + " (" + it.shot + ", 가로세로비
 **box 의 가로세로비를 자산의 비율에 맞춰야 한다.** 비율이 어긋나면 렌더러가 비율을 지키느라
 인물을 통째로 줄여버려 의도한 크기보다 훨씬 작게 들어간다. 앉은 자세는 다리를 뻗어 가로로 넓고,
 선 자세는 좁고 길다. 원하는 세로 길이를 먼저 정한 뒤 가로는 비율을 곱해 구한다.
+
+## 인물을 세울 수 없는 배경이면 그렇다고 답한다
+
+억지로 제안하지 않는다. 다음 같은 사진은 인물 구도를 잡을 수 없다.
+- 접사나 사물 위주라 사람이 설 깊이가 없는 사진 (음식, 소품, 문서)
+- 하늘·벽면처럼 거리 기준이 없어 인물 크기를 정할 수 없는 사진
+- 이미 인물이 화면을 채우고 있어 배경으로 쓸 수 없는 사진
+- 너무 어둡거나 흐려 공간 구조를 읽을 수 없는 사진
+
+이 경우 suggestions 를 비우고 unavailable 에 **왜 어려운지와 어떤 배경이면 되는지**를
+한두 문장으로 쓴다. 찍는 사람이 다음에 무엇을 하면 되는지 알 수 있어야 한다.
+
+{"suggestions":[],"unavailable":"음식이 화면을 채우고 있어 사람이 설 자리가 없습니다. 한 걸음 물러나 테이블과 주변 공간이 함께 보이게 찍어보세요"}
 
 ## 구조선
 구도를 지탱하는 배경 선을 최대 3개 고른다. 테이블 모서리, 창틀, 벽 경계, 수평선, 바닥 경계처럼

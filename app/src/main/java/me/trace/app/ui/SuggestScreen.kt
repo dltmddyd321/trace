@@ -40,6 +40,7 @@ import kotlinx.coroutines.launch
 import me.trace.app.ai.AssetSummary
 import me.trace.app.ai.PlacementAdvisor
 import me.trace.app.ai.PlacementSuggestion
+import me.trace.app.ai.SuggestionResult
 import me.trace.app.data.PoseAsset
 
 /**
@@ -63,6 +64,7 @@ fun SuggestScreen(
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var suggestions by remember { mutableStateOf<List<PlacementSuggestion>>(emptyList()) }
+    var unavailable by remember { mutableStateOf<String?>(null) }
     var selected by remember { mutableStateOf<PlacementSuggestion?>(null) }
 
     Column(
@@ -101,11 +103,21 @@ fun SuggestScreen(
             onClick = {
                 loading = true
                 error = null
+                unavailable = null
                 scope.launch {
                     advisor.suggest(background, request, assets.map { it.summary() })
-                        .onSuccess {
-                            suggestions = it
-                            selected = it.firstOrNull()
+                        .onSuccess { result ->
+                            when (result) {
+                                is SuggestionResult.Ready -> {
+                                    suggestions = result.suggestions
+                                    selected = result.suggestions.firstOrNull()
+                                }
+                                is SuggestionResult.Unavailable -> {
+                                    suggestions = emptyList()
+                                    selected = null
+                                    unavailable = result.reason
+                                }
+                            }
                         }
                         .onFailure { error = it.message ?: "추천을 받지 못했습니다" }
                     loading = false
@@ -125,6 +137,15 @@ fun SuggestScreen(
             Notice("local.properties 에 geminiApiKey 를 넣으면 추천 기능이 켜집니다")
         }
         error?.let { Notice(it) }
+        // 억지 제안보다 "왜 안 되는지"를 알려주는 편이 다음 행동으로 이어진다.
+        unavailable?.let {
+            Text(
+                it,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(top = 12.dp),
+            )
+        }
 
         if (loading) {
             Notice("바닥과 수평선을 찾고, 샷 유형을 고르는 중…")

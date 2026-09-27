@@ -25,8 +25,16 @@ data class PlacementSuggestion(
 
 @Serializable
 internal data class SuggestionEnvelope(
-    val suggestions: List<PlacementSuggestion>,
+    val suggestions: List<PlacementSuggestion> = emptyList(),
+    /** 이 배경으로는 인물 구도를 잡을 수 없을 때 그 이유. 비어 있으면 제안이 나온 것이다. */
+    val unavailable: String = "",
 )
+
+/** 제안 목록이거나, 왜 제안할 수 없는지에 대한 설명이거나 둘 중 하나다. */
+sealed interface SuggestionResult {
+    data class Ready(val suggestions: List<PlacementSuggestion>) : SuggestionResult
+    data class Unavailable(val reason: String) : SuggestionResult
+}
 
 /** Gemini generateContent 요청/응답 중 실제로 쓰는 부분만 정의한다. */
 @Serializable
