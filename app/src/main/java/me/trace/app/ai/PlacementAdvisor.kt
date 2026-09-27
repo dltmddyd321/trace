@@ -13,9 +13,14 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.TimeUnit
 
-private const val MODEL = "gemini-3.8-flash"
-private const val ENDPOINT =
-    "https://generativelanguage.googleapis.com/v1beta/models/$MODEL:generateContent"
+/**
+ * 앞의 것부터 쓰고, 혼잡하면 다음으로 넘어간다.
+ * 무료 티어는 모델마다 혼잡도가 달라서, 기다리는 것보다 옮겨 타는 쪽이 빠를 때가 많다.
+ */
+private val MODELS = listOf("gemini-3.8-flash", "gemini-3.5-flash", "gemini-2.5-flash")
+
+private fun endpointFor(model: String) =
+    "https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent"
 
 /** 배경 이미지를 보낼 때 줄이는 긴 변 길이. 구도 판단에 원본 해상도는 필요 없고 토큰만 먹는다. */
 private const val UPLOAD_MAX_EDGE = 900
@@ -67,16 +72,7 @@ class PlacementAdvisor(
                 )
             )
 
-            val request = Request.Builder()
-                .url(ENDPOINT)
-                // 키를 쿼리 문자열이 아니라 헤더로 보낸다. URL 은 로그·프록시에 남는다.
-                .addHeader("x-goog-api-key", apiKey)
-                .post(body.toRequestBody("application/json".toMediaType()))
-                .build()
-
-            // 무료 티어는 몰릴 때 503/429 를 자주 돌려준다. 몇 초 뒤면 대개 통과하므로
-            // 사용자가 버튼을 다시 누르게 하지 않고 대기 시간을 늘려가며 재시도한다.
-            val payload = requestWithRetry(request)
+            val payload = requestWithFallback(body)
 
             val text = json.decodeFromString<GenerateResponse>(payload)
                 .candidates.firstOrNull()?.content?.parts
@@ -92,29 +88,39 @@ class PlacementAdvisor(
         }
     }
 
-    private fun requestWithRetry(request: Request): String {
+    /**
+     * 혼잡하면 잠시 기다렸다가 재시도하고, 그래도 안 되면 다음 모델로 옮겨 탄다.
+     * 키나 요청 자체가 잘못된 경우는 기다려도 달라지지 않으므로 즉시 알린다.
+     */
+    private fun requestWithFallback(body: String): String {
         var lastMessage = "요청에 실패했습니다"
-        RETRY_DELAYS_MS.forEachIndexed { attempt, delayMs ->
-            client.newCall(request).execute().use { response ->
-                val payload = response.body?.string().orEmpty()
-                if (response.isSuccessful) return payload
 
-                lastMessage = when (response.code) {
-                    503 -> "AI 서버가 혼잡합니다. 잠시 후 다시 시도해주세요"
-                    429 -> "요청이 몰렸습니다. 잠시 후 다시 시도해주세요"
-                    401, 403 -> "API 키가 올바르지 않습니다"
-                    else -> "요청 실패 (${response.code})"
+        MODELS.forEach { model ->
+            val request = Request.Builder()
+                .url(endpointFor(model))
+                // 키를 쿼리 문자열이 아니라 헤더로 보낸다. URL 은 로그·프록시에 남는다.
+                .addHeader("x-goog-api-key", apiKey)
+                .post(body.toRequestBody("application/json".toMediaType()))
+                .build()
+
+            RETRY_DELAYS_MS.forEachIndexed { attempt, delayMs ->
+                client.newCall(request).execute().use { response ->
+                    if (response.isSuccessful) return response.body?.string().orEmpty()
+
+                    when (response.code) {
+                        503, 429, 500 -> lastMessage = "AI 서버가 혼잡합니다"
+                        401, 403 -> error("API 키가 올바르지 않습니다")
+                        else -> return@use  // 이 모델만의 문제일 수 있으니 다음 모델로 넘어간다
+                    }
                 }
-                // 과부하·한도 초과가 아니면 기다려도 달라지지 않는다.
-                if (response.code != 503 && response.code != 429) error(lastMessage)
+                if (attempt < RETRY_DELAYS_MS.lastIndex) Thread.sleep(delayMs)
             }
-            if (attempt < RETRY_DELAYS_MS.lastIndex) Thread.sleep(delayMs)
         }
-        error(lastMessage)
+        error("$lastMessage. 잠시 후 다시 시도해주세요")
     }
 }
 
-private val RETRY_DELAYS_MS = longArrayOf(1_500, 4_000, 8_000)
+private val RETRY_DELAYS_MS = longArrayOf(2_000, 5_000)
 
 private fun userText(userRequest: String): String =
     if (userRequest.isBlank()) {
