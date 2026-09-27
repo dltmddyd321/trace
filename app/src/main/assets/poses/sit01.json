@@ -1,6 +1,7 @@
 {
   "id": "sit01",
   "category": "outdoor",
+  "sourceAspect": 0.6242,
   "source": "sit01.jpg",
   "person": {
     "silhouette": [

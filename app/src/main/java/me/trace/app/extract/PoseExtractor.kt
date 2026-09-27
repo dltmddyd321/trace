@@ -78,6 +78,7 @@ class PoseExtractor(private val context: Context) {
                 PoseAsset(
                     id = id,
                     category = "user",
+                    sourceAspect = bitmap.width.toFloat() / bitmap.height,
                     person = Person(
                         silhouette = silhouette,
                         box = listOf(xs.min(), ys.min(), xs.max(), ys.max()),

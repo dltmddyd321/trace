@@ -10,6 +10,12 @@ import kotlinx.serialization.Serializable
 data class PoseAsset(
     val id: String,
     val category: String,
+    /**
+     * 원본 사진의 가로/세로 비율. 좌표가 이 프레임 기준으로 정규화돼 있으므로,
+     * 비율이 다른 화면에 그릴 때 이 값으로 보정하지 않으면 사람이 늘어나거나 눌린다.
+     * 0 이면 알 수 없다는 뜻이고 보정 없이 그린다.
+     */
+    val sourceAspect: Float = 0f,
     val person: Person,
     val structures: List<Structure> = emptyList(),
     val hint: String = "",

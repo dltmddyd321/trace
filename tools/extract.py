@@ -94,6 +94,9 @@ def extract(image_path: Path) -> dict:
     return {
         "id": image_path.stem,
         "category": "outdoor",
+        # 좌표는 원본 프레임 기준으로 정규화돼 있다. 비율을 같이 남기지 않으면
+        # 종횡비가 다른 화면에 펼칠 때 사람이 늘어나거나 눌린다.
+        "sourceAspect": round(w / h, 4),
         "source": image_path.name,
         "person": {"silhouette": silhouette, "box": box, "joints": joints, "edges": edges},
         # 배경은 이미지를 직접 보고 채운다. 최대 3개.

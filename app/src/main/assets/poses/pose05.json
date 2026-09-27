@@ -1,6 +1,7 @@
 {
   "id": "pose05",
   "category": "outdoor",
+  "sourceAspect": 0.6676,
   "source": "pose05.jpg",
   "person": {
     "silhouette": [
@@ -320,46 +321,6 @@
       ]
     ]
   },
-  "structures": [
-    {
-      "type": "floor_line",
-      "line": [
-        [
-          0.0,
-          0.625
-        ],
-        [
-          1.0,
-          0.605
-        ]
-      ]
-    },
-    {
-      "type": "wall_line",
-      "line": [
-        [
-          0.335,
-          0.315
-        ],
-        [
-          0.0,
-          0.555
-        ]
-      ]
-    },
-    {
-      "type": "window_frame",
-      "line": [
-        [
-          0.835,
-          0.0
-        ],
-        [
-          0.835,
-          0.56
-        ]
-      ]
-    }
-  ],
-  "hint": "계단 선을 가로 가이드에 맞추고 인물을 가운데 세우세요"
+  "structures": [],
+  "hint": ""
 }

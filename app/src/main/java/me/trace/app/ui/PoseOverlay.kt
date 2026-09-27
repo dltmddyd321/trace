@@ -83,7 +83,7 @@ fun PoseOverlay(
     showStructures: Boolean = true,
 ) {
     Canvas(modifier = modifier) {
-        val transform = Transform.fit(asset.person.box, placement.box, size)
+        val transform = Transform.fit(asset, placement.box, size)
         val cropY = cropLine(asset, transform, crop, size)
 
         clipRect(top = 0f, bottom = cropY) {
@@ -146,45 +146,63 @@ private fun fallbackCropLine(asset: PoseAsset, crop: Crop): Float {
  * 계산을 전부 픽셀 공간에서 하는 이유는 한 배율을 가로세로에 똑같이 곱해야
  * 사람이 눌리거나 늘어나지 않기 때문이다. 정규화 공간에서 맞추면 캔버스 종횡비만큼 왜곡된다.
  */
+/**
+ * 자산 좌표를 캔버스 픽셀로 옮긴다.
+ *
+ * 자산의 좌표는 원본 사진 프레임 기준으로 정규화돼 있다. 그 프레임과 캔버스의 종횡비가
+ * 다르면 좌표를 그대로 펼칠 때 사람이 늘어나거나 눌린다 — 2:3 사진을 세로로 긴 폰 화면에
+ * 펼치면 길쭉해진다. 그래서 먼저 원본 비율을 지키는 가상 프레임에 좌표를 놓고,
+ * 그 프레임을 캔버스에 배치한다.
+ */
 private class Transform(
-    private val scale: Float,
+    private val frameW: Float,
+    private val frameH: Float,
     private val dx: Float,
     private val dy: Float,
     private val size: Size,
 ) {
     fun map(point: List<Float>) = Offset(
-        x = point[0] * size.width * scale + dx,
-        y = point[1] * size.height * scale + dy,
+        x = point[0] * frameW + dx,
+        y = point[1] * frameH + dy,
     )
 
-    /** 구조선은 인물이 아니라 프레임 기준이라 배치 변환을 적용하지 않는다. */
+    /** 구조선은 자산이 아니라 촬영 프레임 기준이라 보정 없이 캔버스에 바로 얹는다. */
     fun raw(point: List<Float>) = Offset(point[0] * size.width, point[1] * size.height)
 
     companion object {
-        fun fit(sourceBox: List<Float>, targetBox: List<Float>?, size: Size): Transform {
-            // 목표 박스가 없으면 변환하지 않는다 — 좌표를 그대로 캔버스에 펼친다.
-            if (targetBox == null) return Transform(scale = 1f, dx = 0f, dy = 0f, size = size)
+        fun fit(asset: PoseAsset, targetBox: List<Float>?, size: Size): Transform {
+            // 원본 비율을 지키는 가상 프레임. 비율을 모르면 캔버스를 그대로 쓴다(보정 없음).
+            val aspect = asset.sourceAspect
+            val baseH = size.height
+            val baseW = if (aspect > 0f) aspect * baseH else size.width
 
-            val sx0 = sourceBox[0] * size.width
-            val sy0 = sourceBox[1] * size.height
-            val sx1 = sourceBox[2] * size.width
-            val sy1 = sourceBox[3] * size.height
+            if (targetBox == null) {
+                // 배치 지정이 없으면 원본 구도 그대로. 프리뷰처럼 가운데를 채우도록 잘라 넣는다.
+                val scale = maxOf(size.width / baseW, size.height / baseH)
+                val w = baseW * scale
+                val h = baseH * scale
+                return Transform(w, h, (size.width - w) / 2f, (size.height - h) / 2f, size)
+            }
+
+            val box = asset.person.box
+            val personW = ((box[2] - box[0]) * baseW).coerceAtLeast(1f)
+            val personH = ((box[3] - box[1]) * baseH).coerceAtLeast(1f)
 
             val tx0 = targetBox[0] * size.width
-            val ty0 = targetBox[1] * size.height
-            val tx1 = targetBox[2] * size.width
             val ty1 = targetBox[3] * size.height
+            val targetW = (targetBox[2] - targetBox[0]) * size.width
+            val targetH = (targetBox[3] - targetBox[1]) * size.height
 
-            val sourceW = (sx1 - sx0).coerceAtLeast(1f)
-            val sourceH = (sy1 - sy0).coerceAtLeast(1f)
-            val scale = minOf((tx1 - tx0) / sourceW, (ty1 - ty0) / sourceH)
+            val scale = minOf(targetW / personW, targetH / personH)
+            val w = baseW * scale
+            val h = baseH * scale
 
             // 비율 유지로 남는 여백은 가로는 가운데, 세로는 아래에 맞춘다.
             // 사람은 바닥에 서 있으므로 발 위치가 머리 위 여백보다 중요하다.
-            val dx = tx0 + ((tx1 - tx0) - sourceW * scale) / 2f - sx0 * scale
-            val dy = ty1 - sy1 * scale
+            val dx = tx0 + (targetW - personW * scale) / 2f - box[0] * w
+            val dy = ty1 - box[3] * h
 
-            return Transform(scale, dx, dy, size)
+            return Transform(w, h, dx, dy, size)
         }
     }
 }

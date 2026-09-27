@@ -1,6 +1,7 @@
 {
   "id": "pose02",
   "category": "outdoor",
+  "sourceAspect": 0.6854,
   "source": "pose02.jpg",
   "person": {
     "silhouette": [

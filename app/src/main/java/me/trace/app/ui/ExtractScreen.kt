@@ -116,7 +116,8 @@ fun ExtractScreen(
                     bitmap = it.asImageBitmap(),
                     contentDescription = "고른 사진",
                     modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Fit,
+                    // 오버레이가 프레임을 잘라 채우므로 사진도 같은 방식이어야 겹쳐진다.
+                    contentScale = ContentScale.Crop,
                 )
             }
             asset?.let {
