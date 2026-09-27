@@ -13,9 +13,9 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.TimeUnit
 
-private const val ENDPOINT = "https://api.anthropic.com/v1/messages"
-private const val MODEL = "claude-sonnet-5"
-private const val API_VERSION = "2023-06-01"
+private const val MODEL = "gemini-3.8-flash"
+private const val ENDPOINT =
+    "https://generativelanguage.googleapis.com/v1beta/models/$MODEL:generateContent"
 
 /** 배경 이미지를 보낼 때 줄이는 긴 변 길이. 구도 판단에 원본 해상도는 필요 없고 토큰만 먹는다. */
 private const val UPLOAD_MAX_EDGE = 900
@@ -29,7 +29,7 @@ private val json = Json { ignoreUnknownKeys = true }
  * 그대로 옮겼다 — 샷 유형을 먼저 정하지 않으면 설 바닥이 없는 배경에 전신을 넣어 깨진다.
  */
 class PlacementAdvisor(
-    private val apiKey: String = BuildConfig.ANTHROPIC_API_KEY,
+    private val apiKey: String = BuildConfig.GEMINI_API_KEY,
 ) {
     val isAvailable: Boolean get() = apiKey.isNotBlank()
 
@@ -42,7 +42,7 @@ class PlacementAdvisor(
     suspend fun suggest(
         background: Bitmap,
         userRequest: String,
-        availableAssets: List<String>,
+        availableAssets: List<AssetSummary>,
     ): Result<List<PlacementSuggestion>> = withContext(Dispatchers.IO) {
         if (!isAvailable) {
             return@withContext Result.failure(IllegalStateException("API 키가 설정되지 않았습니다"))
@@ -50,30 +50,27 @@ class PlacementAdvisor(
 
         runCatching {
             val body = json.encodeToString(
-                MessagesRequest.serializer(),
-                MessagesRequest(
-                    model = MODEL,
-                    maxTokens = 1024,
-                    system = systemPrompt(availableAssets),
-                    messages = listOf(
-                        Message(
-                            role = "user",
-                            content = listOf(
-                                ContentBlock(
-                                    type = "image",
-                                    source = ImageSource(data = background.toBase64Jpeg()),
-                                ),
-                                ContentBlock(type = "text", text = userText(userRequest)),
-                            ),
+                GenerateRequest.serializer(),
+                GenerateRequest(
+                    systemInstruction = Content(
+                        parts = listOf(Part(text = systemPrompt(availableAssets)))
+                    ),
+                    contents = listOf(
+                        Content(
+                            parts = listOf(
+                                Part(inlineData = InlineData(data = background.toBase64Jpeg())),
+                                Part(text = userText(userRequest)),
+                            )
                         )
                     ),
+                    generationConfig = GenerationConfig(),
                 )
             )
 
             val request = Request.Builder()
                 .url(ENDPOINT)
-                .addHeader("x-api-key", apiKey)
-                .addHeader("anthropic-version", API_VERSION)
+                // 키를 쿼리 문자열이 아니라 헤더로 보낸다. URL 은 로그·프록시에 남는다.
+                .addHeader("x-goog-api-key", apiKey)
                 .post(body.toRequestBody("application/json".toMediaType()))
                 .build()
 
@@ -81,8 +78,9 @@ class PlacementAdvisor(
                 val payload = response.body?.string().orEmpty()
                 if (!response.isSuccessful) error("요청 실패 (${response.code})")
 
-                val text = json.decodeFromString<MessagesResponse>(payload)
-                    .content.firstOrNull { it.type == "text" }?.text
+                val text = json.decodeFromString<GenerateResponse>(payload)
+                    .candidates.firstOrNull()?.content?.parts
+                    ?.firstNotNullOfOrNull { it.text }
                     ?: error("응답에 내용이 없습니다")
 
                 json.decodeFromString<SuggestionEnvelope>(text.extractJsonObject()).suggestions
@@ -98,7 +96,10 @@ private fun userText(userRequest: String): String =
         "이 배경에서 인물 사진을 찍으려고 합니다. 요청: $userRequest"
     }
 
-private fun systemPrompt(assets: List<String>) = """
+/** 프롬프트에 넘기는 자산 요약. 비율을 모르면 AI가 박스를 자산에 맞게 잡을 수 없다. */
+data class AssetSummary(val id: String, val shot: String, val aspect: String)
+
+private fun systemPrompt(assets: List<AssetSummary>) = """
 당신은 인물 사진의 구도를 제안한다. 배경 사진을 보고, 그 자리에서 사람을 어디에 어떤 자세로
 세울지 정한다.
 
@@ -121,9 +122,11 @@ box는 0~1을 벗어나도 된다. y1이 1보다 크면 발이 화면 아래에 
 인물이 프레임에 전부 들어갈 필요는 없다 — 무릎이나 허벅지에서 잘린 구도가 더 자연스러울 때가 많다.
 
 ## 쓸 수 있는 포즈 자산
-${assets.joinToString(", ")}
-sit 으로 시작하는 것이 앉은 자세, pose 로 시작하는 것이 서 있는 자세다.
-shot 이 sitting 이면 sit 자산을, 아니면 pose 자산을 고른다.
+${assets.joinToString("\n") { "- " + it.id + " (" + it.shot + ", 가로세로비 " + it.aspect + ")" }}
+
+**box 의 가로세로비를 자산의 비율에 맞춰야 한다.** 비율이 어긋나면 렌더러가 비율을 지키느라
+인물을 통째로 줄여버려 의도한 크기보다 훨씬 작게 들어간다. 앉은 자세는 다리를 뻗어 가로로 넓고,
+선 자세는 좁고 길다. 원하는 세로 길이를 먼저 정한 뒤 가로는 비율을 곱해 구한다.
 
 ## 구조선
 구도를 지탱하는 배경 선을 최대 3개 고른다. 테이블 모서리, 창틀, 벽 경계, 수평선, 바닥 경계처럼

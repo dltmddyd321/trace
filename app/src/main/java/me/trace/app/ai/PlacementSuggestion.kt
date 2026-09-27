@@ -28,42 +28,43 @@ internal data class SuggestionEnvelope(
     val suggestions: List<PlacementSuggestion>,
 )
 
-/** Anthropic Messages API 요청/응답 중 실제로 쓰는 부분만 정의한다. */
+/** Gemini generateContent 요청/응답 중 실제로 쓰는 부분만 정의한다. */
 @Serializable
-internal data class MessagesRequest(
-    val model: String,
-    @SerialName("max_tokens") val maxTokens: Int,
-    val system: String,
-    val messages: List<Message>,
+internal data class GenerateRequest(
+    @SerialName("system_instruction") val systemInstruction: Content,
+    val contents: List<Content>,
+    @SerialName("generationConfig") val generationConfig: GenerationConfig,
 )
 
 @Serializable
-internal data class Message(
-    val role: String,
-    val content: List<ContentBlock>,
+internal data class Content(
+    val parts: List<Part>,
 )
 
 @Serializable
-internal data class ContentBlock(
-    val type: String,
+internal data class Part(
     val text: String? = null,
-    val source: ImageSource? = null,
+    @SerialName("inline_data") val inlineData: InlineData? = null,
 )
 
 @Serializable
-internal data class ImageSource(
-    val type: String = "base64",
-    @SerialName("media_type") val mediaType: String = "image/jpeg",
+internal data class InlineData(
+    @SerialName("mime_type") val mimeType: String = "image/jpeg",
     val data: String,
 )
 
 @Serializable
-internal data class MessagesResponse(
-    val content: List<ResponseBlock> = emptyList(),
+internal data class GenerationConfig(
+    /** JSON 으로 답하도록 강제한다. 설명을 곁들이거나 코드펜스로 감싸는 걸 막는다. */
+    @SerialName("responseMimeType") val responseMimeType: String = "application/json",
 )
 
 @Serializable
-internal data class ResponseBlock(
-    val type: String,
-    val text: String = "",
+internal data class GenerateResponse(
+    val candidates: List<Candidate> = emptyList(),
+)
+
+@Serializable
+internal data class Candidate(
+    val content: Content? = null,
 )

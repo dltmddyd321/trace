@@ -25,8 +25,8 @@ android {
         // 앱은 경로 B를 비활성화한 채 동작한다 — 키가 없다고 빌드가 깨지면 안 된다.
         val apiKey = Properties().apply {
             rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
-        }.getProperty("anthropicApiKey", "")
-        buildConfigField("String", "ANTHROPIC_API_KEY", "\"$apiKey\"")
+        }.getProperty("geminiApiKey", "")
+        buildConfigField("String", "GEMINI_API_KEY", "\"$apiKey\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -64,6 +64,7 @@ dependencies {
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.androidx.camera.view)
     implementation(libs.okhttp)
+    implementation(libs.mediapipe.tasks.vision)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))

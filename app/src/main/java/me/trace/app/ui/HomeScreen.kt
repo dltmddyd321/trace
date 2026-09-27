@@ -15,8 +15,8 @@ import androidx.compose.ui.unit.dp
 
 @Composable
 fun HomeScreen(
-    onPickPose: () -> Unit,
     onCaptureBackground: () -> Unit,
+    onExtractFromPhoto: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -43,11 +43,11 @@ fun HomeScreen(
         )
 
         OutlinedButton(
-            onClick = onPickPose,
+            onClick = onExtractFromPhoto,
             modifier = Modifier.fillMaxWidth().padding(top = 24.dp),
-        ) { Text("구도 고르기") }
+        ) { Text("사진에서 따오기") }
         Text(
-            "미리 준비된 자세 중에서 고릅니다",
+            "마음에 드는 사진을 고르면 그 자세를 본떠옵니다",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 6.dp),

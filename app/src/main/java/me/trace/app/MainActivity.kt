@@ -19,10 +19,10 @@ import me.trace.app.data.PoseAsset
 import me.trace.app.data.Structure
 import me.trace.app.data.loadPoseAssets
 import me.trace.app.ui.CameraScreen
+import me.trace.app.ui.ExtractScreen
 import me.trace.app.ui.HomeScreen
 import me.trace.app.ui.Crop
 import me.trace.app.ui.Placement
-import me.trace.app.ui.PoseListScreen
 import me.trace.app.ui.SuggestScreen
 import me.trace.app.ui.theme.TraceTheme
 
@@ -43,8 +43,8 @@ class MainActivity : ComponentActivity() {
 /** 화면 전이. 경로 A(PoseList)와 경로 B(BackgroundCapture → Suggest)가 Shoot 에서 합류한다. */
 private sealed interface Screen {
     data object Home : Screen
-    data object PoseList : Screen
     data object BackgroundCapture : Screen
+    data object Extract : Screen
     data class Suggest(val background: Bitmap) : Screen
     data class Shoot(
         val asset: PoseAsset,
@@ -62,15 +62,15 @@ private fun TraceApp(modifier: Modifier = Modifier) {
 
     when (val current = screen) {
         Screen.Home -> HomeScreen(
-            onPickPose = { screen = Screen.PoseList },
             onCaptureBackground = { screen = Screen.BackgroundCapture },
+            onExtractFromPhoto = { screen = Screen.Extract },
             modifier = modifier,
         )
 
-        Screen.PoseList -> PoseListScreen(
-            assets = assets,
-            // 사진에서 본뜬 템플릿은 원래 구도를 그대로 쓴다.
-            onSelect = { screen = Screen.Shoot(it, Placement.Original) },
+        Screen.Extract -> ExtractScreen(
+            // 본뜬 자세는 원본 구도 그대로 쓴다 — 그 사진처럼 찍겠다는 뜻이므로.
+            onConfirm = { screen = Screen.Shoot(it, Placement.Original) },
+            onBack = { screen = Screen.Home },
             modifier = modifier,
         )
 

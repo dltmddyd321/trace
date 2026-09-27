@@ -37,6 +37,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
+import me.trace.app.ai.AssetSummary
 import me.trace.app.ai.PlacementAdvisor
 import me.trace.app.ai.PlacementSuggestion
 import me.trace.app.data.PoseAsset
@@ -101,7 +102,7 @@ fun SuggestScreen(
                 loading = true
                 error = null
                 scope.launch {
-                    advisor.suggest(background, request, assets.map { it.id })
+                    advisor.suggest(background, request, assets.map { it.summary() })
                         .onSuccess {
                             suggestions = it
                             selected = it.firstOrNull()
@@ -121,7 +122,7 @@ fun SuggestScreen(
         }
 
         if (!advisor.isAvailable) {
-            Notice("local.properties 에 anthropicApiKey 를 넣으면 추천 기능이 켜집니다")
+            Notice("local.properties 에 geminiApiKey 를 넣으면 추천 기능이 켜집니다")
         }
         error?.let { Notice(it) }
 
@@ -222,5 +223,17 @@ private fun Notice(text: String) {
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(top = 10.dp),
+    )
+}
+
+/** 자산의 실제 가로세로비를 요약한다. 앉은 자세는 넓고 선 자세는 좁아 값이 크게 갈린다. */
+private fun PoseAsset.summary(): AssetSummary {
+    val box = person.box
+    val width = (box[2] - box[0]).coerceAtLeast(1e-4f)
+    val height = (box[3] - box[1]).coerceAtLeast(1e-4f)
+    return AssetSummary(
+        id = id,
+        shot = if (id.startsWith("sit")) "앉은 자세" else "선 자세",
+        aspect = String.format("%.2f", width / height),
     )
 }
