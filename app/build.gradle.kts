@@ -29,10 +29,35 @@ android {
         buildConfigField("String", "GEMINI_API_KEY", "\"$apiKey\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // MediaPipe 네이티브 라이브러리가 ABI 마다 10MB 안팎이라 전부 담으면 APK 가 78MB 가 된다.
+        // 배포 대상은 실기기뿐이고 arm64 가 아닌 안드로이드 폰은 사실상 없다.
+        ndk {
+            abiFilters += "arm64-v8a"
+        }
+    }
+
+    // 서명 정보도 local.properties 에서 읽는다. 키스토어와 비밀번호는 저장소에 들어가지 않으므로
+    // 설정이 없으면 릴리스 빌드는 서명 없이 나온다 — 빌드 자체가 깨지지는 않는다.
+    val signing = Properties().apply {
+        rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
+    }
+    val storeFileName = signing.getProperty("releaseStoreFile", "")
+
+    signingConfigs {
+        if (storeFileName.isNotBlank() && rootProject.file(storeFileName).exists()) {
+            create("release") {
+                storeFile = rootProject.file(storeFileName)
+                storePassword = signing.getProperty("releaseStorePassword")
+                keyAlias = signing.getProperty("releaseKeyAlias")
+                keyPassword = signing.getProperty("releaseKeyPassword")
+            }
+        }
     }
 
     buildTypes {
         release {
+            signingConfig = signingConfigs.findByName("release")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
