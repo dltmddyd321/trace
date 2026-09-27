@@ -8,6 +8,7 @@ import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -26,6 +27,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -42,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import android.util.Size
 import java.util.concurrent.Executors
+import kotlinx.coroutines.suspendCancellableCoroutine
 import me.trace.app.camera.SilentCapture
 import me.trace.app.camera.saveToGallery
 import me.trace.app.data.PoseAsset
@@ -111,6 +114,7 @@ private fun CameraContent(
     val silentCapture = remember { SilentCapture() }
     // 분석 콜백은 카메라 스레드를 잡으므로 전용 실행기에 태운다.
     val analysisExecutor = remember { Executors.newSingleThreadExecutor() }
+    val mainExecutor = remember(context) { ContextCompat.getMainExecutor(context) }
     val imageAnalysis = remember {
         ImageAnalysis.Builder()
             // 기본값이 640x480이라 그대로 두면 저장 화질이 못 쓸 수준이 된다.
@@ -131,36 +135,35 @@ private fun CameraContent(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        AndroidView(
-            modifier = Modifier.fillMaxSize(),
-            factory = { ctx ->
-                PreviewView(ctx).apply {
-                    layoutParams = ViewGroup.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                    )
-                    // 오버레이 좌표는 화면을 꽉 채운 프리뷰를 전제로 계산되므로
-                    // 여백을 남기는 FIT 대신 잘라내는 FILL이어야 가이드와 실제 화각이 맞는다.
-                    scaleType = PreviewView.ScaleType.FILL_CENTER
-                }
-            },
-            update = { previewView ->
-                val providerFuture = ProcessCameraProvider.getInstance(context)
-                providerFuture.addListener({
-                    val provider = providerFuture.get()
-                    val preview = Preview.Builder().build().also {
-                        it.surfaceProvider = previewView.surfaceProvider
-                    }
-                    provider.unbindAll()
-                    provider.bindToLifecycle(
-                        lifecycleOwner,
-                        CameraSelector.DEFAULT_BACK_CAMERA,
-                        preview,
-                        imageAnalysis,
-                    )
-                }, androidx.core.content.ContextCompat.getMainExecutor(context))
-            },
-        )
+        val previewView = remember {
+            PreviewView(context).apply {
+                layoutParams = ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                )
+                // 오버레이 좌표는 화면을 꽉 채운 프리뷰를 전제로 계산되므로
+                // 여백을 남기는 FIT 대신 잘라내는 FILL 이어야 가이드와 실제 화각이 맞는다.
+                scaleType = PreviewView.ScaleType.FILL_CENTER
+            }
+        }
+
+        // 바인딩을 AndroidView 의 update 에 두면 리컴포지션마다 unbind/rebind 가 돌아
+        // 프리뷰가 검게 끊긴다. 생명주기에 한 번만 묶는다.
+        LaunchedEffect(previewView) {
+            val provider = awaitCameraProvider(context, mainExecutor)
+            val preview = Preview.Builder().build().also {
+                it.surfaceProvider = previewView.surfaceProvider
+            }
+            provider.unbindAll()
+            provider.bindToLifecycle(
+                lifecycleOwner,
+                CameraSelector.DEFAULT_BACK_CAMERA,
+                preview,
+                imageAnalysis,
+            )
+        }
+
+        AndroidView(factory = { previewView }, modifier = Modifier.fillMaxSize())
 
         if (showOverlay && asset != null) {
             PoseOverlay(
@@ -198,7 +201,8 @@ private fun CameraContent(
     // 화면을 벗어나면 카메라를 놓아준다. 안 그러면 다른 앱이 카메라를 못 잡는다.
     DisposableEffect(Unit) {
         onDispose {
-            ProcessCameraProvider.getInstance(context).get().unbindAll()
+            val future = ProcessCameraProvider.getInstance(context)
+            future.addListener({ future.get().unbindAll() }, mainExecutor)
             analysisExecutor.shutdown()
         }
     }
@@ -293,4 +297,17 @@ private fun PermissionNotice(
         }
         TextButton(onClick = onBack) { Text("돌아가기", color = Color.White) }
     }
+}
+
+/** ListenableFuture 를 코루틴으로 감싼다. concurrent-futures-ktx 를 끌어오지 않기 위한 최소 구현. */
+private suspend fun awaitCameraProvider(
+    context: android.content.Context,
+    executor: java.util.concurrent.Executor,
+): ProcessCameraProvider = suspendCancellableCoroutine { cont ->
+    val future = ProcessCameraProvider.getInstance(context)
+    future.addListener({
+        runCatching { future.get() }
+            .onSuccess { cont.resume(it) {} }
+            .onFailure { cont.cancel(it) }
+    }, executor)
 }

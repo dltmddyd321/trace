@@ -74,25 +74,47 @@ class PlacementAdvisor(
                 .post(body.toRequestBody("application/json".toMediaType()))
                 .build()
 
-            client.newCall(request).execute().use { response ->
-                val payload = response.body?.string().orEmpty()
-                if (!response.isSuccessful) error("요청 실패 (${response.code})")
+            // 무료 티어는 몰릴 때 503/429 를 자주 돌려준다. 몇 초 뒤면 대개 통과하므로
+            // 사용자가 버튼을 다시 누르게 하지 않고 대기 시간을 늘려가며 재시도한다.
+            val payload = requestWithRetry(request)
 
-                val text = json.decodeFromString<GenerateResponse>(payload)
-                    .candidates.firstOrNull()?.content?.parts
-                    ?.firstNotNullOfOrNull { it.text }
-                    ?: error("응답에 내용이 없습니다")
+            val text = json.decodeFromString<GenerateResponse>(payload)
+                .candidates.firstOrNull()?.content?.parts
+                ?.firstNotNullOfOrNull { it.text }
+                ?: error("응답에 내용이 없습니다")
 
-                val envelope = json.decodeFromString<SuggestionEnvelope>(text.extractJsonObject())
-                when {
-                    envelope.suggestions.isNotEmpty() -> SuggestionResult.Ready(envelope.suggestions)
-                    envelope.unavailable.isNotBlank() -> SuggestionResult.Unavailable(envelope.unavailable)
-                    else -> SuggestionResult.Unavailable("이 사진으로는 구도를 잡기 어렵습니다")
-                }
+            val envelope = json.decodeFromString<SuggestionEnvelope>(text.extractJsonObject())
+            when {
+                envelope.suggestions.isNotEmpty() -> SuggestionResult.Ready(envelope.suggestions)
+                envelope.unavailable.isNotBlank() -> SuggestionResult.Unavailable(envelope.unavailable)
+                else -> SuggestionResult.Unavailable("이 사진으로는 구도를 잡기 어렵습니다")
             }
         }
     }
+
+    private fun requestWithRetry(request: Request): String {
+        var lastMessage = "요청에 실패했습니다"
+        RETRY_DELAYS_MS.forEachIndexed { attempt, delayMs ->
+            client.newCall(request).execute().use { response ->
+                val payload = response.body?.string().orEmpty()
+                if (response.isSuccessful) return payload
+
+                lastMessage = when (response.code) {
+                    503 -> "AI 서버가 혼잡합니다. 잠시 후 다시 시도해주세요"
+                    429 -> "요청이 몰렸습니다. 잠시 후 다시 시도해주세요"
+                    401, 403 -> "API 키가 올바르지 않습니다"
+                    else -> "요청 실패 (${response.code})"
+                }
+                // 과부하·한도 초과가 아니면 기다려도 달라지지 않는다.
+                if (response.code != 503 && response.code != 429) error(lastMessage)
+            }
+            if (attempt < RETRY_DELAYS_MS.lastIndex) Thread.sleep(delayMs)
+        }
+        error(lastMessage)
+    }
 }
+
+private val RETRY_DELAYS_MS = longArrayOf(1_500, 4_000, 8_000)
 
 private fun userText(userRequest: String): String =
     if (userRequest.isBlank()) {
