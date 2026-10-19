@@ -65,6 +65,23 @@ internal data class InlineData(
 internal data class GenerationConfig(
     /** JSON 으로 답하도록 강제한다. 설명을 곁들이거나 코드펜스로 감싸는 걸 막는다. */
     @SerialName("responseMimeType") val responseMimeType: String = "application/json",
+    @SerialName("thinkingConfig") val thinkingConfig: ThinkingConfig = ThinkingConfig(),
+)
+
+/**
+ * 생각 단계를 끈다.
+ *
+ * 켜두면 답(수백 토큰) 전에 생각을 1,300~1,500토큰 더 해서 응답이 19~20초 걸렸고, 끄면
+ * 6~14초로 줄었다. 생각 토큰은 출력 단가로 과금돼 비용도 같이 준다. 배경 3장으로 비교했을 때
+ * 구도 판단이 무너지지는 않았다 — 제안을 2~3안 주므로 하나가 조금 약해도 고를 여지가 남는다.
+ *
+ * thinkingLevel("low") 이 아니라 thinkingBudget 을 쓰는 이유: 폴백 마지막인 2.5-flash 가
+ * thinkingLevel 을 400 으로 거부한다. 앞 모델들이 혼잡할 때 살아 있는 게 그 모델이라 여기서
+ * 깨지면 폴백이 통째로 무의미해진다. thinkingBudget 은 폴백 세 모델이 모두 받는다.
+ */
+@Serializable
+internal data class ThinkingConfig(
+    @SerialName("thinkingBudget") val thinkingBudget: Int = 0,
 )
 
 @Serializable

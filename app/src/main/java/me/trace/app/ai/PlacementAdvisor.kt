@@ -28,6 +28,20 @@ private const val UPLOAD_MAX_EDGE = 900
 private val json = Json { ignoreUnknownKeys = true }
 
 /**
+ * 요청 직렬화용. kotlinx.serialization 은 기본값과 같은 필드를 내보내지 않는데, 이 요청에서는
+ * 기본값이 곧 의도다 — JSON 강제, 생각 끄기, 이미지 형식이 전부 기본값으로 들어 있다.
+ * encodeDefaults 를 켜야 실제로 실려 나간다. 대신 null 은 빼야 한다. Part 는 text 와
+ * inline_data 중 하나만 갖는데, null 을 같이 보내면 둘 다 가진 것처럼 읽힌다.
+ */
+private val requestJson = Json {
+    encodeDefaults = true
+    explicitNulls = false
+}
+
+internal fun encodeGenerateRequest(request: GenerateRequest): String =
+    requestJson.encodeToString(GenerateRequest.serializer(), request)
+
+/**
  * 배경 사진과 사용자의 요청을 받아 구도를 제안한다.
  *
  * 판정 기준은 tools/prompt.md 와 같은 내용이다. 파이프라인에서 손으로 수행하며 검증한 절차를
@@ -54,8 +68,7 @@ class PlacementAdvisor(
         }
 
         runCatching {
-            val body = json.encodeToString(
-                GenerateRequest.serializer(),
+            val body = encodeGenerateRequest(
                 GenerateRequest(
                     systemInstruction = Content(
                         parts = listOf(Part(text = systemPrompt(availableAssets)))
